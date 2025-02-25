@@ -62,6 +62,9 @@ volumes:
     remote: storage:/$[[ project.project_name ]]/$[[ flow.project_id ]]/notebooks
     mount: /project/notebooks
     local: notebooks
+  mlflow_artifacts:
+    remote: storage:/$[[ project.project_name ]]/$[[ flow.project_id ]]/mlflow
+    mount: /project/mlflow
 
 jobs:
 ## A live workflow can run jobs by their identifiers ('job-id') using the `apolo-flow run <job-id>` command.
@@ -121,6 +124,7 @@ jobs:
     env:
       EXPOSE_SSH: "yes"
       PYTHONPATH: $[[ volumes.code.mount ]]
+      MLFLOW_TRACKING_URI: "http://${{ inspect_job('mlflow').internal_hostname_named }}:5000"
     # cmd: python -u $[[ volumes.code.mount ]]/train.py
     ## A job executes either a command, a bash script, or a python script.
     ## All of 'cmd', 'bash', and 'python' are optional.
@@ -157,3 +161,11 @@ jobs:
       volumes_config_remote: $[[ volumes.config.remote ]]
       volumes_notebooks_remote: $[[ volumes.notebooks.remote ]]
       volumes_results_remote: $[[ volumes.results.remote ]]
+  mlflow:
+    action: gh:apolo-actions/mlflow@main
+    args:
+      preset: cpu-medium
+      mode: server
+      artifacts_destination: ${{ volumes.mlflow_artifacts.mount }}
+      volumes: "${{ to_json( [volumes.mlflow_artifacts.ref_rw] ) }}"
+      http_auth: "False"

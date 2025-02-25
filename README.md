@@ -14,6 +14,7 @@ pip install -U pipx
 pipx install apolo-all
 apolo login
 apolo-flow build train
+apolo-flow run mlflow
 # copy data
 curl https://download.pytorch.org/tutorial/data.zip -o data/data.zip && unzip data/data.zip && rm data/data.zip
 apolo-flow run train
