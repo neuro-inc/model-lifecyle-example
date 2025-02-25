@@ -1,0 +1,159 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/neuro-inc/neuro-flow/refs/heads/master/src/apolo_flow/flow-schema.json
+## Keep the preceding line to enable code completion for the workflow configuration file.
+kind: live
+## Required. Type of workflow, might be one of the following:
+## - 'live' -- full reference at https://docs.apolo.us/apolo-flow-reference/workflow-syntax/live-workflow-syntax
+## - 'batch' -- full reference at https://docs.apolo.us/apolo-flow-reference/workflow-syntax/batch-workflow-syntax
+# id: <id>
+## Optional. Identifier of the workflow. By default, the id is 'live'. It's available as $[[ flow.flow_id ]] in experssions.
+## Note: Not to be confused with $[[ flow.project_id ]], which is a different context defined in the `project.yml` file.
+title: model-lifecycle-example
+## Optional. Workflow title. Can be any valid string and is accessible as $[[ flow.title ]]
+
+defaults:
+## Optional section.
+## A map of default settings that will apply to all jobs in the workflow.
+## You can override these global default settings for specific jobs.
+  life_span: 1d
+  # volumes:
+  #   - storage:some/path:/path/in/job
+  #   - storage://absolute/path:/different/path/in/job
+  # Default volumes are not passed to actions.
+
+images:
+  ## Optional section, a mapping of image definitions used by the workflow.
+  train:
+  ## `apolo-flow build train` creates an image from the passed Dockerfile and uploads it to the Apolo Registry.
+  ## The $[[ images.img_id.ref ]] expression can be used for pointing to an image from jobs.<job-id>.image.
+    ref: image:/$[[ project.project_name ]]/$[[ flow.project_id ]]_train:latest
+    dockerfile: $[[ flow.workspace ]]/scripts/Dockerfile
+    context: $[[ flow.workspace ]]/scripts
+    build_preset: cpu-large
+
+  serve:
+  ## `apolo-flow build train` creates an image from the passed Dockerfile and uploads it to the Apolo Registry.
+  ## The $[[ images.img_id.ref ]] expression can be used for pointing to an image from jobs.<job-id>.image.
+    ref: image:/$[[ project.project_name ]]/$[[ flow.project_id ]]_serve:latest
+    dockerfile: $[[ flow.workspace ]]/scripts/Dockerfile.server
+    context: $[[ flow.workspace ]]/scripts
+    build_preset: cpu-large
+
+
+volumes:
+## Optional section.
+## A volume defines a link between the Apolo storage folder or disk, and a local folder within the job.
+## A volume can be mounted to a job by using the `jobs.<job-id>.volumes` attribute.
+  data:
+  ## The key 'volume-id' (data in this case) is a string and its value is a map of the volume's configuration data.
+  ## You must replace 'volume-id' with a string that is unique to the volumes object.
+  ## The 'volume-id' must start with a letter and contain only alphanumeric characters or underscore symbols.
+    remote: storage:/$[[ project.project_name ]]/$[[ flow.project_id ]]/data
+    mount: /project/data
+    local: data/names
+  models:
+    remote: storage:/$[[ project.project_name ]]/$[[ flow.project_id ]]/models
+    mount: /project/models
+    # local: models
+  code:
+    remote: storage:/$[[ project.project_name ]]/$[[ flow.project_id ]]/modules
+    mount: /project/modules
+    local: scripts/modules
+  notebooks:
+    remote: storage:/$[[ project.project_name ]]/$[[ flow.project_id ]]/notebooks
+    mount: /project/notebooks
+    local: notebooks
+
+jobs:
+## A live workflow can run jobs by their identifiers ('job-id') using the `apolo-flow run <job-id>` command.
+## Each job runs remotely on the Apolo Platform.
+## Jobs could be defined in two different ways:
+##  1. Directly in this file;
+##  2. In a separate file (on a local machine or in a Git repository) and reused as an 'action' or 'module'.
+##  3. Inheriting some attributes from the mixins
+## Checkout full documentation at the respective pages:
+##  1. https://docs.apolo.us/apolo-flow-reference/workflow-syntax/live-workflow-syntax#jobs
+##  2. https://docs.apolo.us/apolo-flow-reference/workflow-syntax/actions-syntax and https://docs.apolo.us/apolo-flow-reference/modules
+##  3. https://docs.apolo.us/apolo-flow-reference/mixins
+##  4.
+  remote_debug:
+  ## Each job must have an associated Job ID (a.k.a. job name) within the project.
+  ## The key 'job-id' is a string and its value is a map of the job's configuration data or action call.
+  ## 'job-id' must start with a letter and contain only alphanumeric characters or underscore symbols `_`.
+  ## Dashes `-` are not allowed.
+    action: gh:apolo-actions/remote_debug@v1.0.0
+    ## The type of this particular job is an 'action'.
+    ## 'action' is a URL that specifies the location of the job's description.
+    ## Two schemes exist:
+    ## - `workspace:` or `ws:` for action files that are stored locally
+    ## - `github:` or `gh:` for actions that are bound to a GitHub repository
+    ## In this particular case, we are using a GitHub repository https://github.com/apolo-actions/remote_debug under the `@1.0.0` tag.
+    ## To run this job, Apolo-Flow will fetch the 'action.yaml' file from the repository and execute the job defined in it.
+    args:
+    ## Optional action-specific mapping of values that will be passed to the actions as arguments.
+    ## They should correspond to inputs defined in the action file.
+    ## Each value should be a string.
+      image: $[[ images.train.ref ]]
+      volumes_data_remote: $[[ volumes.data.remote ]]
+      volumes_code_remote: $[[ volumes.code.remote ]]
+      volumes_config_remote: $[[ volumes.config.remote ]]
+      volumes_results_remote: $[[ volumes.results.remote ]]
+
+  test:
+    image: bash
+    # volumes:
+    #   - $[[ volumes.data.ref_ro ]]
+    bash: |
+        ls . # $[[ volumes.data.mount ]]
+  train:
+  ## Unlike the 'remote_debug' action call, the 'train' job description is stored directly in this file.
+    image: $[[ images.train.ref ]]
+    life_span: 10d
+    volumes:
+    ## A list of job volumes.
+    ## You can specify a plain string for the volume reference and use $[[ volumes.<volume-id>.ref ]] expressions.
+      - $[[ upload(volumes.data).ref_ro ]]
+      - $[[ upload(volumes.code).ref_ro ]]
+      ## upload() - is an expression function which performs `apolo-flow upload code` before each run of this job
+      ## Check this list of magic functions and their use-cases under
+      ##  https://docs.apolo.us/apolo-flow-reference/expression-functions
+      - $[[ volumes.models.ref_rw ]]
+    # workdir: /users/my_user
+    env:
+      EXPOSE_SSH: "yes"
+      PYTHONPATH: $[[ volumes.code.mount ]]
+    # cmd: python -u $[[ volumes.code.mount ]]/train.py
+    ## A job executes either a command, a bash script, or a python script.
+    ## All of 'cmd', 'bash', and 'python' are optional.
+    bash: |
+        cd /project
+        python -u $[[ volumes.code.mount ]]/train.py --data $[[ volumes.data.mount ]] -m $[[ volumes.models.mount ]]
+    preset: gpu-l4-x1 # cpu-large
+
+  serve:
+    image: $[[ images.train.ref ]]
+    life_span: 10d
+    volumes:
+      - $[[ upload(volumes.code).ref_ro ]]
+      - $[[ volumes.models.ref_ro ]]
+    env:
+      PYTHONPATH: $[[ volumes.code.mount ]]
+      MODEL_PATH: "$[[ volumes.models.mount ]]/weights.pt"
+      PARAMS_PATH: "$[[ volumes.models.mount ]]/params.json"
+    http_port: 8000
+    http_auth: false
+    bash: |
+        cd /project
+        pip install uvicorn fastapi
+        python -u $[[ volumes.code.mount ]]/server.py
+    preset: cpu-medium
+
+  jupyter:
+    action: gh:apolo-actions/jupyter@v1.1.2
+    args:
+      image: $[[ images.train.ref ]]
+      multi_args: $[[ multi.args ]]
+      volumes_data_remote: $[[ volumes.data.remote ]]
+      volumes_code_remote: $[[ volumes.code.remote ]]
+      volumes_config_remote: $[[ volumes.config.remote ]]
+      volumes_notebooks_remote: $[[ volumes.notebooks.remote ]]
+      volumes_results_remote: $[[ volumes.results.remote ]]
