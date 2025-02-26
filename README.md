@@ -13,6 +13,8 @@ Then run:
 pip install -U pipx
 pipx install apolo-all
 apolo login
+# you may need to create a disk for mlflow if you haven't already
+apolo disk create 2GB --name global-mlflow-db
 apolo-flow run mlflow
 # copy data
 mkdir -p data && curl https://download.pytorch.org/tutorial/data.zip -o data/data.zip && unzip data/data.zip && rm data/data.zip
