@@ -13,10 +13,11 @@ Then run:
 pip install -U pipx
 pipx install apolo-all
 apolo login
-apolo-flow build train
 apolo-flow run mlflow
 # copy data
-curl https://download.pytorch.org/tutorial/data.zip -o data/data.zip && unzip data/data.zip && rm data/data.zip
+mkdir -p data && curl https://download.pytorch.org/tutorial/data.zip -o data/data.zip && unzip data/data.zip && rm data/data.zip
+apolo-flow build train
+
 apolo-flow run train
 apolo-flow run serve
 ```
