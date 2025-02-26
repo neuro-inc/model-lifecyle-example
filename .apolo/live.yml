@@ -63,8 +63,11 @@ volumes:
     mount: /project/notebooks
     local: notebooks
   mlflow_artifacts:
-    remote: storage:/$[[ project.project_name ]]/$[[ flow.project_id ]]/mlflow
+    remote: storage:/$[[ project.project_name ]]/global/mlflow
     mount: /project/mlflow
+  mlflow_backend:
+    remote: disk:/$[[ project.project_name ]]/global-mlflow-db
+    mount: /db
 
 jobs:
 ## A live workflow can run jobs by their identifiers ('job-id') using the `apolo-flow run <job-id>` command.
@@ -162,10 +165,11 @@ jobs:
       volumes_notebooks_remote: $[[ volumes.notebooks.remote ]]
       volumes_results_remote: $[[ volumes.results.remote ]]
   mlflow:
-    action: gh:apolo-actions/mlflow@main
+    action: gh:apolo-actions/mlflow@imge-update
     args:
       preset: cpu-medium
       mode: server
       artifacts_destination: ${{ volumes.mlflow_artifacts.mount }}
-      volumes: "${{ to_json( [volumes.mlflow_artifacts.ref_rw] ) }}"
+      volumes: "${{ to_json( [volumes.mlflow_artifacts.ref_rw, volumes.mlflow_backend.ref_rw] ) }}"
       http_auth: "False"
+      backend_store_uri: "sqlite:///${{ volumes.mlflow_backend.mount }}/mlflow.db"
