@@ -127,7 +127,7 @@ jobs:
     env:
       EXPOSE_SSH: "yes"
       PYTHONPATH: $[[ volumes.code.mount ]]
-      MLFLOW_TRACKING_URI: "http://${{ inspect_job('mlflow').internal_hostname_named }}:5000"
+      MLFLOW_TRACKING_URI: "http://${{ inspect_job('mlflow').internal_hostname_named }}"
     # cmd: python -u $[[ volumes.code.mount ]]/train.py
     ## A job executes either a command, a bash script, or a python script.
     ## All of 'cmd', 'bash', and 'python' are optional.
