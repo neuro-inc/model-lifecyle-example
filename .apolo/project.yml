@@ -4,5 +4,5 @@
 id: model_lifecycle_example
 ## Could be referenced as $[[ project.id ]] or $[[ flow.project_id ]] contexts.
 ## Default value: name of the folder containing `.apolo`
-# project_name: jordy-dev
+# project_name: <your-project-name>
 ## Optional platform project name that owns the flow, referenced via $[[ project.project_name ]]
