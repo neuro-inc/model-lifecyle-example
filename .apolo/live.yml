@@ -134,7 +134,7 @@ jobs:
     bash: |
         cd /project
         python -u $[[ volumes.code.mount ]]/train.py --data $[[ volumes.data.mount ]] -m $[[ volumes.models.mount ]]
-    preset: cpu-large # gpu-l4-x1 # cpu-large
+    preset: a100x4 # gpu-l4-x1 # cpu-large
 
   serve:
     image: $[[ images.train.ref ]]
