@@ -1,0 +1,80 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/neuro-inc/neuro-flow/refs/heads/master/src/apolo_flow/flow-schema.json
+## Keep the preceding line to enable code completion for the workflow configuration file.
+kind: batch
+## Required. Type of workflow, might be one of the following:
+## - 'live' -- full reference at https://docs.apolo.us/apolo-flow-reference/workflow-syntax/live-workflow-syntax
+## - 'batch' -- full reference at https://docs.apolo.us/apolo-flow-reference/workflow-syntax/batch-workflow-syntax
+# id: <id>
+## Optional. Identifier of the workflow. By default, the id is 'live'. It's available as $[[ flow.flow_id ]] in experssions.
+## Note: Not to be confused with $[[ flow.project_id ]], which is a different context defined in the `project.yml` file.
+title: model-lifecycle-example-bake
+## Optional. Workflow title. Can be any valid string and is accessible as $[[ flow.title ]]
+
+defaults:
+## Optional section.
+## A map of default settings that will apply to all jobs in the workflow.
+## You can override these global default settings for specific jobs.
+  life_span: 1d
+  # volumes:
+  #   - storage:some/path:/path/in/job
+  #   - storage://absolute/path:/different/path/in/job
+  # Default volumes are not passed to actions.
+
+images:
+  ## Optional section, a mapping of image definitions used by the workflow.
+  train:
+  ## `apolo-flow build train` creates an image from the passed Dockerfile and uploads it to the Apolo Registry.
+  ## The $[[ images.img_id.ref ]] expression can be used for pointing to an image from jobs.<job-id>.image.
+    ref: image:/$[[ project.project_name ]]/$[[ flow.project_id ]]_train:latest
+    dockerfile: $[[ flow.workspace ]]/scripts/Dockerfile
+    context: $[[ flow.workspace ]]/scripts
+    build_preset: cpu-medium # gpu-a100-x1 # cpu-large
+
+  serve:
+  ## `apolo-flow build train` creates an image from the passed Dockerfile and uploads it to the Apolo Registry.
+  ## The $[[ images.img_id.ref ]] expression can be used for pointing to an image from jobs.<job-id>.image.
+    ref: image:/$[[ project.project_name ]]/$[[ flow.project_id ]]_serve:latest
+    dockerfile: $[[ flow.workspace ]]/scripts/Dockerfile.server
+    context: $[[ flow.workspace ]]/scripts
+    build_preset: cpu-medium # gpu-a100-x1 # cpu-medium
+
+
+volumes:
+## Optional section.
+## A volume defines a link between the Apolo storage folder or disk, and a local folder within the job.
+## A volume can be mounted to a job by using the `jobs.<job-id>.volumes` attribute.
+  data:
+  ## The key 'volume-id' (data in this case) is a string and its value is a map of the volume's configuration data.
+  ## You must replace 'volume-id' with a string that is unique to the volumes object.
+  ## The 'volume-id' must start with a letter and contain only alphanumeric characters or underscore symbols.
+    remote: storage:/$[[ project.project_name ]]/$[[ flow.project_id ]]/data
+    mount: /project/data    
+  models:
+    remote: storage:/$[[ project.project_name ]]/$[[ flow.project_id ]]/models
+    mount: /project/models
+  code:
+    remote: storage:/$[[ project.project_name ]]/$[[ flow.project_id ]]/modules
+    mount: /project/modules    
+  notebooks:
+    remote: storage:/$[[ project.project_name ]]/$[[ flow.project_id ]]/notebooks
+    mount: /project/notebooks    
+  mlflow_artifacts:
+    remote: storage:/$[[ project.project_name ]]/global/mlflow
+    mount: /project/mlflow
+  mlflow_backend:
+    remote: disk:/$[[ project.project_name ]]/global-mlflow-db
+    mount: /db
+
+tasks:
+  - id: mlflow
+    image: bash
+    preset: cpu-medium
+    http_port: 80
+    http_auth: false
+    life_span: 1d
+    volumes:
+      - $[[ volumes.mlflow_artifacts.ref_rw ]]
+      - $[[ volumes.mlflow_backend.ref_rw ]]
+    workdir: ${{ volumes.mlflow_artifacts.mount }}
+    cmd: |
+      echo "Hello, world!"
