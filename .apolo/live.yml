@@ -127,7 +127,7 @@ jobs:
     env:
       EXPOSE_SSH: "yes"
       PYTHONPATH: $[[ volumes.code.mount ]]
-      MLFLOW_TRACKING_URI: "http://${{ inspect_job('mlflow').internal_hostname_named }}:5000"
+      MLFLOW_TRACKING_URI: "http://${{ inspect_job('mlflow').internal_hostname_named }}"
     # cmd: python -u $[[ volumes.code.mount ]]/train.py
     ## A job executes either a command, a bash script, or a python script.
     ## All of 'cmd', 'bash', and 'python' are optional.
@@ -161,9 +161,7 @@ jobs:
       multi_args: $[[ multi.args ]]
       volumes_data_remote: $[[ volumes.data.remote ]]
       volumes_code_remote: $[[ volumes.code.remote ]]
-      volumes_config_remote: $[[ volumes.config.remote ]]
       volumes_notebooks_remote: $[[ volumes.notebooks.remote ]]
-      volumes_results_remote: $[[ volumes.results.remote ]]
   mlflow:
     action: gh:apolo-actions/mlflow@imge-update
     args:
@@ -171,5 +169,6 @@ jobs:
       mode: server
       artifacts_destination: ${{ volumes.mlflow_artifacts.mount }}
       volumes: "${{ to_json( [volumes.mlflow_artifacts.ref_rw, volumes.mlflow_backend.ref_rw] ) }}"
-      http_auth: "False"
+      http_auth: false
       backend_store_uri: "sqlite:///${{ volumes.mlflow_backend.mount }}/mlflow.db"
+      port: 80

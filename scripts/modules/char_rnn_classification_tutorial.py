@@ -244,62 +244,64 @@ def train(rnn, training_data, n_epoch = 10, n_batch_size = 64, report_every = 50
     Learn on a batch of training_data for a specified number of iterations and reporting thresholds
     """
     logger.info("Starting training")
-    with mlflow.start_run():
-        # Log parameters
-        mlflow.log_params({
-            "n_epoch": n_epoch,
-            "batch_size": n_batch_size,
-            "learning_rate": learning_rate,
-            "dataset_size": len(training_data)
-        })
+    
+    # Log parameters
+    mlflow.log_params({
+        "n_epoch": n_epoch,
+        "batch_size": n_batch_size,
+        "learning_rate": learning_rate,
+        "dataset_size": len(training_data)
+    })
+    
+    # Existing training setup code
+    current_loss = 0
+    all_losses = []
+    rnn.train() 
+    optimizer = torch.optim.SGD(rnn.parameters(), lr=learning_rate)
+
+    start = time.time()
+    logger.info(f"training on data set with n = {len(training_data)}")
+
+    for iter in range(1, n_epoch + 1): 
+        rnn.zero_grad() # clear the gradients 
+
+        # create some minibatches
+        # we cannot use dataloaders because each of our names is a different length
+        batches = list(range(len(training_data)))
+        random.shuffle(batches)
+        batches = np.array_split(batches, len(batches) //n_batch_size )
+
+        for idx, batch in enumerate(batches): 
+            batch_loss = 0
+            for i in batch: #for each example in this batch
+                (label_tensor, text_tensor, label, text) = training_data[i]
+                output = rnn.forward(text_tensor)
+                loss = criterion(output, label_tensor)
+                batch_loss += loss
+
+            # optimize parameters
+            batch_loss.backward()
+            nn.utils.clip_grad_norm_(rnn.parameters(), 3)
+            optimizer.step()
+            optimizer.zero_grad()
+
+            current_loss += batch_loss.item() / len(batch)
         
-        # Existing training setup code
+        all_losses.append(current_loss / len(batches) )
+        # Log metrics
+        mlflow.log_metric("avg_loss", all_losses[-1], step=iter)
+        
+        if iter % report_every == 0:
+            logger.info(f"{iter} ({iter / n_epoch:.0%}): \t average batch loss = {all_losses[-1]}")
         current_loss = 0
-        all_losses = []
-        rnn.train() 
-        optimizer = torch.optim.SGD(rnn.parameters(), lr=learning_rate)
-
-        start = time.time()
-        logger.info(f"training on data set with n = {len(training_data)}")
-
-        for iter in range(1, n_epoch + 1): 
-            rnn.zero_grad() # clear the gradients 
-
-            # create some minibatches
-            # we cannot use dataloaders because each of our names is a different length
-            batches = list(range(len(training_data)))
-            random.shuffle(batches)
-            batches = np.array_split(batches, len(batches) //n_batch_size )
-
-            for idx, batch in enumerate(batches): 
-                batch_loss = 0
-                for i in batch: #for each example in this batch
-                    (label_tensor, text_tensor, label, text) = training_data[i]
-                    output = rnn.forward(text_tensor)
-                    loss = criterion(output, label_tensor)
-                    batch_loss += loss
-
-                # optimize parameters
-                batch_loss.backward()
-                nn.utils.clip_grad_norm_(rnn.parameters(), 3)
-                optimizer.step()
-                optimizer.zero_grad()
-
-                current_loss += batch_loss.item() / len(batch)
-            
-            all_losses.append(current_loss / len(batches) )
-            # Log metrics
-            mlflow.log_metric("avg_loss", all_losses[-1], step=iter)
-            
-            if iter % report_every == 0:
-                logger.info(f"{iter} ({iter / n_epoch:.0%}): \t average batch loss = {all_losses[-1]}")
-            current_loss = 0
-        
-        # Log training time
-        training_time = time.time() - start
+    
+    # Log training time
+    training_time = time.time() - start
+    if mlflow.active_run():
         mlflow.log_metric("training_time", training_time)
-        
-        # Log the model
+    
+    # Log the model
+    if mlflow.active_run():
         mlflow.pytorch.log_model(rnn, "model")
         
     logger.info("Finished training")
@@ -356,6 +358,8 @@ def evaluate(rnn, testing_data, classes):
 
     # sphinx_gallery_thumbnail_number = 2
     plt.show()
+    fig.savefig("confusion_matrix.png")
+    mlflow.log_artifact("confusion_matrix.png")
 
 def load_model(weights_file: Path, params: Dict) -> CharRNN:
     rnn = CharRNN(
@@ -418,30 +422,33 @@ def save_model(rnn: CharRNN, params: Dict, models_dir: str = "models") -> None:
 
 def train_eval_save(data_dir: str = "data/names", models_dir: str = "models"):
     alldata = load_data(data_dir)
-    train_set, test_set = train_test_split(alldata)
-    rnn, params = get_rnn(alldata)
-    logger.info(f"Training params: {params}")
-    start = time.time()
-    all_losses = train(rnn, train_set, n_epoch=27, learning_rate=0.15, report_every=5)
-    end = time.time()
-    logger.info(f"Training took {end-start}s")
+    with mlflow.start_run():
+        train_set, test_set = train_test_split(alldata)
+        rnn, params = get_rnn(alldata)
+        logger.info(f"Training params: {params}")
+        start = time.time()
+        all_losses = train(rnn, train_set, n_epoch=27, learning_rate=0.15, report_every=5)
+        end = time.time()
+        logger.info(f"Training took {end-start}s")
 
-    ######################################################################
-    # Plotting the Results
-    # --------------------
-    #
-    # Plotting the historical loss from ``all_losses`` shows the network
-    # learning:
-    #
+        ######################################################################
+        # Plotting the Results
+        # --------------------
+        #
+        # Plotting the historical loss from ``all_losses`` shows the network
+        # learning:
+        #
 
-    plt.figure()
-    plt.plot(all_losses)
-    plt.show()
+        plt.figure()
+        plt.plot(all_losses)
+        plt.show()
+        plt.savefig("training_loss.png")
+        mlflow.log_artifact("training_loss.png")
 
-    # Evaluate
-    evaluate(rnn, test_set, classes=alldata.labels_uniq)
+        # Evaluate
+        evaluate(rnn, test_set, classes=alldata.labels_uniq)
 
-    save_model(rnn, params, models_dir)
+        save_model(rnn, params, models_dir)
 
     return rnn
 
