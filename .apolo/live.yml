@@ -163,7 +163,7 @@ jobs:
       volumes_code_remote: $[[ volumes.code.remote ]]
       volumes_notebooks_remote: $[[ volumes.notebooks.remote ]]
   mlflow:
-    action: gh:apolo-actions/mlflow@imge-update
+    action: gh:apolo-actions/mlflow@main
     args:
       preset: cpu-medium
       mode: server
